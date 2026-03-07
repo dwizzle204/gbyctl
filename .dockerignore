@@ -1,0 +1,12 @@
+.git
+.github
+target
+.dist
+dist
+*.tar.gz
+*.deb
+.local
+.config
+coverage
+*.log
+.DS_Store
