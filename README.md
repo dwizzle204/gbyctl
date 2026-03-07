@@ -90,7 +90,7 @@ sudo dpkg -i gbyctl_*.deb
 
 ### Requirements
 
-- **Rust 1.82+** (if building from source)
+- **Rust 1.94+** (if building from source)
 - **Ubuntu 20.04+** or compatible distribution
 - **Non-root user** (gbyctl refuses to run as root)
 
@@ -390,7 +390,7 @@ Your API keys never touch the filesystem unencrypted.
 
 ### Prerequisites
 
-- **Rust 1.82+** (use [rustup](https://rustup.rs/))
+- **Rust 1.94+** (use [rustup](https://rustup.rs/))
 - **Ubuntu 20.04+** or compatible environment for testing
 - **OpenAI-compatible or Claude API key** (for LLM integration testing)
 
