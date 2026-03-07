@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.3 - 2026-03-06
+
+- strengthen `CONTRIBUTING.md` around a fork-first contribution model for public contributors
+- add free CI code coverage artifact generation with `cargo-llvm-cov`
+- add PR and main-branch security scanning with CodeQL and cargo-audit
+
 ## 0.5.2 - 2026-03-06
 
 - add PR-path dependency review and release-build validation in GitHub Actions CI
