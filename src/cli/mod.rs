@@ -19,7 +19,7 @@ use crate::intent;
 use crate::intent::llm_classifier::{Classification, ClassifyError};
 use crate::plan;
 use crate::policy::checklist::{self, ChecklistResult};
-use crate::skills::types::{IntentMatch, PolicyClass, SkillId};
+use crate::skills::types::{CommandTemplate, IntentMatch, PlanStep, PolicyClass, SkillId};
 use crate::state::cache::{self, LocalState};
 use crate::verify;
 
@@ -779,6 +779,10 @@ fn run_step_with_permission_recovery(
         ))?;
         if prompt_yes_no("Retry with sudo now? [y/N]", false)? {
             let sudo_command = format!("sudo {command}");
+            if let Err(reason) = validate_sudo_retry_policy(step_id, &sudo_command) {
+                emit_line(&format!("Retry blocked by policy: {reason}"))?;
+                return Ok(result);
+            }
             if !cli.json {
                 emit_line(&format!("CMD (retry): {sudo_command}"))?;
             }
@@ -804,6 +808,46 @@ fn should_offer_sudo_retry(
         return false;
     }
     looks_like_permission_error(&result.output)
+}
+
+fn validate_sudo_retry_policy(step_id: &str, sudo_command: &str) -> Result<()> {
+    let (retry_class, retry_note) = crate::policy::classifier::classify(sudo_command);
+    match retry_class {
+        PolicyClass::ApprovalRequired => {}
+        PolicyClass::ManualOnly => {
+            return Err(anyhow::anyhow!(
+                "sudo retry requires manual execution: {retry_note}"
+            ));
+        }
+        PolicyClass::Forbidden => {
+            return Err(anyhow::anyhow!(
+                "sudo retry is forbidden by policy: {retry_note}"
+            ));
+        }
+        PolicyClass::SafeExecute => {
+            return Err(anyhow::anyhow!(
+                "sudo retry did not classify as approval-required: {retry_note}"
+            ));
+        }
+    }
+
+    let retry_step = PlanStep {
+        id: format!("{step_id}-sudo-retry"),
+        command: CommandTemplate {
+            summary: "Permission recovery retry".to_owned(),
+            command: sudo_command.to_owned(),
+            modifies_state: false,
+        },
+        policy_class: retry_class,
+        policy_note: retry_note,
+    };
+
+    match checklist::evaluate(&retry_step) {
+        ChecklistResult::Allow => Ok(()),
+        ChecklistResult::Block { reason } => Err(anyhow::anyhow!(
+            "sudo retry failed checklist validation: {reason}"
+        )),
+    }
 }
 
 fn looks_like_permission_error(output: &str) -> bool {
@@ -911,8 +955,8 @@ mod tests {
     fn curates_output_to_non_empty_bounded_lines() {
         let lines = curated_output_lines("line1\n\n line2 \nline3\nline4\nline5\nline6\nline7", 6);
         assert_eq!(lines.len(), 6);
-        assert_eq!(lines[0], "line1");
-        assert_eq!(lines[1], "line2");
-        assert_eq!(lines[5], "line6");
+        assert_eq!(lines.first(), Some(&"line1".to_owned()));
+        assert_eq!(lines.get(1), Some(&"line2".to_owned()));
+        assert_eq!(lines.get(5), Some(&"line6".to_owned()));
     }
 }

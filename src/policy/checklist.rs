@@ -29,9 +29,13 @@ pub fn evaluate(step: &PlanStep) -> ChecklistResult {
         };
     }
 
-    // Least privilege: read-only steps must not require sudo.
+    // Least privilege: read-only steps must not require sudo unless they are
+    // explicitly approval-gated (for example, operator-confirmed recovery).
     let has_sudo = step.command.command.starts_with("sudo ");
-    if !step.command.modifies_state && has_sudo {
+    if !step.command.modifies_state
+        && has_sudo
+        && step.policy_class != PolicyClass::ApprovalRequired
+    {
         return ChecklistResult::Block {
             reason: "Read-only step uses elevated command; violates least privilege".to_owned(),
         };
@@ -111,6 +115,17 @@ mod tests {
         let step = make_step(
             "sudo apt-get install -y nginx",
             true,
+            PolicyClass::ApprovalRequired,
+        );
+        let result = evaluate(&step);
+        assert_eq!(result, ChecklistResult::Allow);
+    }
+
+    #[test]
+    fn allows_readonly_sudo_when_approval_required() {
+        let step = make_step(
+            "sudo journalctl -n 20",
+            false,
             PolicyClass::ApprovalRequired,
         );
         let result = evaluate(&step);
