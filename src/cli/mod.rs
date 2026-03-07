@@ -7,7 +7,7 @@ use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use serde::Serialize;
 
 use crate::audit;
@@ -19,14 +19,19 @@ use crate::intent;
 use crate::intent::llm_classifier::{Classification, ClassifyError};
 use crate::plan;
 use crate::policy::checklist::{self, ChecklistResult};
-use crate::skills::types::{IntentMatch, PolicyClass, SkillId};
+use crate::skills::types::{CommandTemplate, IntentMatch, PlanStep, PolicyClass, SkillId};
 use crate::state::cache::{self, LocalState};
 use crate::verify;
 
 /// Top-level CLI input.
 #[derive(Debug, Parser)]
 #[command(name = "gbyctl")]
-#[command(about = "Ubuntu-focused Linux operations assistant")]
+#[command(
+    about = "Ubuntu-focused Linux operations assistant",
+    long_about = "Accepts free-form Linux operations requests (e.g., \"disk is full\") or explicit subcommands; plan-first UX is the default.",
+    after_help = "Examples:\n  gbyctl \"disk is full\"\n  gbyctl \"install tomcat\"\n  gbyctl --status\n\nTips:\n  --plan     Preview only (no execution)\n  --yes      Execute without interactive approval\n  --json     Machine-readable output\n  --version  Show current gbyctl version",
+    version = env!("CARGO_PKG_VERSION")
+)]
 pub struct Cli {
     /// Optional natural-language request.
     #[arg(value_name = "REQUEST")]
@@ -55,6 +60,10 @@ pub struct Cli {
     /// Disable color output.
     #[arg(long = "no-color")]
     pub no_color: bool,
+
+    /// Show model/config connectivity status.
+    #[arg(long)]
+    pub status: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -88,6 +97,9 @@ pub fn dispatch(cli: Cli) -> Result<()> {
         );
     }
 
+    if cli.status {
+        return render_status(&cli);
+    }
     if cli.request.is_none() && cli.command.is_none() {
         return render_no_input_guidance(&cli);
     }
@@ -187,11 +199,15 @@ pub fn dispatch(cli: Cli) -> Result<()> {
                     emit_line(&format!("STEP {}: {}", step.id, step.command.summary))?;
                     emit_line(&format!("CMD: {}", step.command.command))?;
                 }
-                let result = if cli.json {
-                    runner::run_quiet(&step.command.command)?
-                } else {
-                    runner::run_streaming(&step.command.command)?
-                };
+                let result = run_step_with_permission_recovery(
+                    &cli,
+                    step.id.as_str(),
+                    &step.command.command,
+                    step.command.modifies_state,
+                )?;
+                if !cli.json {
+                    render_curated_step_result(step.id.as_str(), &result)?;
+                }
                 results.push(result);
             }
             PolicyClass::ApprovalRequired => {
@@ -199,11 +215,10 @@ pub fn dispatch(cli: Cli) -> Result<()> {
                     emit_line(&format!("STEP {}: {}", step.id, step.command.summary))?;
                     emit_line(&format!("CMD: {}", step.command.command))?;
                 }
-                let result = if cli.json {
-                    runner::run_quiet(&step.command.command)?
-                } else {
-                    runner::run_streaming(&step.command.command)?
-                };
+                let result = run_command_for_cli(&cli, &step.command.command)?;
+                if !cli.json {
+                    render_curated_step_result(step.id.as_str(), &result)?;
+                }
                 results.push(result);
             }
             PolicyClass::ManualOnly => {
@@ -647,6 +662,9 @@ fn output(cli: &Cli, mode: &str, intent: Option<&str>, message: &str) -> Result<
 }
 
 fn render_no_input_guidance(cli: &Cli) -> Result<()> {
+    if !cli.json {
+        return emit_line(&render_help_text());
+    }
     let message = concat!(
         "Give Gibby a Linux operations request in plain language or use an explicit subcommand.\n",
         "Examples:\n",
@@ -662,6 +680,224 @@ fn render_no_input_guidance(cli: &Cli) -> Result<()> {
     output(cli, "help", None, message)
 }
 
+fn render_status(cli: &Cli) -> Result<()> {
+    let cfg_opt = config::load()?;
+    let Some(cfg) = cfg_opt else {
+        return output(
+            cli,
+            "status",
+            None,
+            "LLM status: not configured\nRun `gbyctl setup` to configure provider/model/API key.",
+        );
+    };
+
+    if !cfg.has_api_key()? {
+        return output(
+            cli,
+            "status",
+            None,
+            &format!(
+                "LLM status: key missing\nProvider: {}\nModel: {}\nAction: run `gbyctl setup` to set or replace the API key.",
+                provider_label(&cfg.provider),
+                cfg.model
+            ),
+        );
+    }
+
+    let api_key = cfg.read_api_key()?;
+    let (status, note): (&str, String) =
+        match intent::llm_classifier::connectivity_probe(&cfg, &api_key) {
+            Ok(()) => ("connected", "Connectivity probe succeeded.".to_owned()),
+            Err(ClassifyError::AuthFailed) => (
+                "auth_failed",
+                "Provider rejected credentials (401/403). Run `gbyctl setup` to rotate the key."
+                    .to_owned(),
+            ),
+            Err(ClassifyError::Other(err)) => (
+                "unreachable",
+                // Compact status messaging: include provider error while avoiding credential leakage.
+                format!("Probe failed: {err}"),
+            ),
+        };
+
+    output(
+        cli,
+        "status",
+        None,
+        &format!(
+            "LLM status: {status}\nProvider: {}\nModel: {}\nBase URL: {}\nNote: {note}",
+            provider_label(&cfg.provider),
+            cfg.model,
+            cfg.base_url
+        ),
+    )
+}
+
+fn provider_label(provider: &ProviderKind) -> &'static str {
+    match provider {
+        ProviderKind::OpenAiCompatible => "openai-compatible",
+        ProviderKind::Claude => "claude",
+    }
+}
+
+fn render_help_text() -> String {
+    let mut command = Cli::command();
+    let mut bytes = Vec::new();
+    if command.write_long_help(&mut bytes).is_err() {
+        return "Run `gbyctl --help` for usage.".to_owned();
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+fn run_command_for_cli(cli: &Cli, command: &str) -> Result<CommandResult> {
+    if cli.json {
+        runner::run_quiet(command)
+    } else {
+        runner::run_streaming(command)
+    }
+}
+
+fn run_safe_command_for_cli(cli: &Cli, command: &str) -> Result<CommandResult> {
+    if cli.json {
+        runner::run_quiet(command)
+    } else {
+        // Curated output is rendered after completion for safe/read-only steps.
+        runner::run_quiet(command)
+    }
+}
+
+fn run_step_with_permission_recovery(
+    cli: &Cli,
+    step_id: &str,
+    command: &str,
+    modifies_state: bool,
+) -> Result<CommandResult> {
+    let result = run_safe_command_for_cli(cli, command)?;
+    if should_offer_sudo_retry(cli, command, modifies_state, &result) {
+        emit_line(&format!(
+            "Detected permission error on step `{step_id}`. Retry with sudo?"
+        ))?;
+        if prompt_yes_no("Retry with sudo now? [y/N]", false)? {
+            let sudo_command = format!("sudo {command}");
+            if let Err(reason) = validate_sudo_retry_policy(step_id, &sudo_command) {
+                emit_line(&format!("Retry blocked by policy: {reason}"))?;
+                return Ok(result);
+            }
+            if !cli.json {
+                emit_line(&format!("CMD (retry): {sudo_command}"))?;
+            }
+            return run_command_for_cli(cli, &sudo_command);
+        }
+    }
+    Ok(result)
+}
+
+fn should_offer_sudo_retry(
+    cli: &Cli,
+    command: &str,
+    modifies_state: bool,
+    result: &CommandResult,
+) -> bool {
+    if result.exit_code == 0 || cli.json || !io::stdin().is_terminal() {
+        return false;
+    }
+    if modifies_state {
+        return false;
+    }
+    if command.trim_start().starts_with("sudo ") {
+        return false;
+    }
+    looks_like_permission_error(&result.output)
+}
+
+fn validate_sudo_retry_policy(step_id: &str, sudo_command: &str) -> Result<()> {
+    let (retry_class, retry_note) = crate::policy::classifier::classify(sudo_command);
+    match retry_class {
+        PolicyClass::ApprovalRequired => {}
+        PolicyClass::ManualOnly => {
+            return Err(anyhow::anyhow!(
+                "sudo retry requires manual execution: {retry_note}"
+            ));
+        }
+        PolicyClass::Forbidden => {
+            return Err(anyhow::anyhow!(
+                "sudo retry is forbidden by policy: {retry_note}"
+            ));
+        }
+        PolicyClass::SafeExecute => {
+            return Err(anyhow::anyhow!(
+                "sudo retry did not classify as approval-required: {retry_note}"
+            ));
+        }
+    }
+
+    let retry_step = PlanStep {
+        id: format!("{step_id}-sudo-retry"),
+        command: CommandTemplate {
+            summary: "Permission recovery retry".to_owned(),
+            command: sudo_command.to_owned(),
+            modifies_state: false,
+        },
+        policy_class: retry_class,
+        policy_note: retry_note,
+    };
+
+    match checklist::evaluate(&retry_step) {
+        ChecklistResult::Allow => Ok(()),
+        ChecklistResult::Block { reason } => Err(anyhow::anyhow!(
+            "sudo retry failed checklist validation: {reason}"
+        )),
+    }
+}
+
+fn looks_like_permission_error(output: &str) -> bool {
+    let text = output.to_ascii_lowercase();
+    let patterns = [
+        "permission denied",
+        "operation not permitted",
+        "must be root",
+        "need to be root",
+        "authentication is required",
+    ];
+    patterns.iter().any(|pattern| text.contains(pattern))
+}
+
+fn render_curated_step_result(step_id: &str, result: &CommandResult) -> Result<()> {
+    let status = if result.exit_code == 0 {
+        "success"
+    } else {
+        "failed"
+    };
+    emit_line(&format!(
+        "RESULT {}: {} (exit {})",
+        step_id, status, result.exit_code
+    ))?;
+
+    let lines = curated_output_lines(&result.output, 6);
+    if lines.is_empty() {
+        return emit_line("DETAIL: command returned no output.");
+    }
+
+    let label = if result.exit_code == 0 {
+        "DETAIL"
+    } else {
+        "ERROR"
+    };
+    emit_line(&format!("{label}:"))?;
+    for line in lines {
+        emit_line(&format!("  {line}"))?;
+    }
+    Ok(())
+}
+
+fn curated_output_lines(raw: &str, max_lines: usize) -> Vec<String> {
+    raw.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .take(max_lines)
+        .map(str::to_owned)
+        .collect()
+}
 fn emit_line(line: &str) -> Result<()> {
     let mut stdout = io::stdout().lock();
     stdout
@@ -694,4 +930,33 @@ fn is_running_as_root() -> bool {
         return uid.trim() == "0";
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{curated_output_lines, looks_like_permission_error};
+
+    #[test]
+    fn detects_permission_denied_signals() {
+        assert!(looks_like_permission_error("journalctl: permission denied"));
+        assert!(looks_like_permission_error(
+            "Error: authentication is required to perform this operation"
+        ));
+        assert!(looks_like_permission_error("operation not permitted"));
+    }
+
+    #[test]
+    fn ignores_unrelated_failures() {
+        assert!(!looks_like_permission_error("connection timed out"));
+        assert!(!looks_like_permission_error("no such file or directory"));
+    }
+
+    #[test]
+    fn curates_output_to_non_empty_bounded_lines() {
+        let lines = curated_output_lines("line1\n\n line2 \nline3\nline4\nline5\nline6\nline7", 6);
+        assert_eq!(lines.len(), 6);
+        assert_eq!(lines.first(), Some(&"line1".to_owned()));
+        assert_eq!(lines.get(1), Some(&"line2".to_owned()));
+        assert_eq!(lines.get(5), Some(&"line6".to_owned()));
+    }
 }

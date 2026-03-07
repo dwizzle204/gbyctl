@@ -88,9 +88,60 @@ fn no_input_returns_guided_help() {
     } else {
         return;
     };
-    assert!(stdout.contains("Give Gibby a Linux operations request"));
+    assert!(stdout.contains("Usage: gbyctl"));
     assert!(stdout.contains("gbyctl \"disk is full\""));
-    assert!(stdout.contains("--help"));
+    assert!(stdout.contains("--status"));
+}
+
+#[test]
+fn no_input_matches_help_surface() {
+    let command_result = isolated_command();
+    assert!(command_result.is_some());
+    let (_temp, mut no_args_cmd) = if let Some(values) = command_result {
+        values
+    } else {
+        return;
+    };
+    let no_args_output_result = no_args_cmd.output();
+    assert!(no_args_output_result.is_ok());
+    let no_args_output = if let Ok(output) = no_args_output_result {
+        output
+    } else {
+        return;
+    };
+    assert!(no_args_output.status.success());
+
+    let command_result = isolated_command();
+    assert!(command_result.is_some());
+    let (_temp, mut help_cmd) = if let Some(values) = command_result {
+        values
+    } else {
+        return;
+    };
+    let help_output_result = help_cmd.arg("--help").output();
+    assert!(help_output_result.is_ok());
+    let help_output = if let Ok(output) = help_output_result {
+        output
+    } else {
+        return;
+    };
+    assert!(help_output.status.success());
+
+    let no_args_stdout_result = String::from_utf8(no_args_output.stdout);
+    assert!(no_args_stdout_result.is_ok());
+    let no_args_stdout = if let Ok(stdout) = no_args_stdout_result {
+        stdout
+    } else {
+        return;
+    };
+    let help_stdout_result = String::from_utf8(help_output.stdout);
+    assert!(help_stdout_result.is_ok());
+    let help_stdout = if let Ok(stdout) = help_stdout_result {
+        stdout
+    } else {
+        return;
+    };
+    assert_eq!(no_args_stdout.trim_end(), help_stdout.trim_end());
 }
 
 #[test]
@@ -456,4 +507,39 @@ fn deterministic_request_bypasses_model_setup_and_key_lookup() {
         json.get("intent").and_then(Value::as_str),
         Some("disk_full_triage")
     );
+}
+
+#[test]
+fn status_reports_not_configured_without_setup() {
+    let command_result = isolated_command();
+    assert!(command_result.is_some());
+    let (_temp, mut command) = if let Some(values) = command_result {
+        values
+    } else {
+        return;
+    };
+    let output_result = command.args(["--status"]).output();
+    assert!(output_result.is_ok());
+    let output = if let Ok(output) = output_result {
+        output
+    } else {
+        return;
+    };
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if stderr.contains("must not be run as root") {
+        assert!(!output.status.success());
+        return;
+    }
+
+    assert!(output.status.success());
+    let stdout_result = String::from_utf8(output.stdout);
+    assert!(stdout_result.is_ok());
+    let stdout = if let Ok(stdout) = stdout_result {
+        stdout
+    } else {
+        return;
+    };
+    assert!(stdout.contains("LLM status: not configured"));
+    assert!(stdout.contains("gbyctl setup"));
 }

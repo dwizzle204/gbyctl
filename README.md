@@ -258,6 +258,7 @@ gbyctl --plan --json "check service status for nginx"
 | `--json` | Machine-readable JSON output |
 | `--verbose` | Extra diagnostics and debug output |
 | `--no-color` | Disable colorized terminal output |
+| `--status` | Check configured provider, key presence, and live connectivity |
 
 ---
 
@@ -276,6 +277,8 @@ gbyctl implements multiple layers of protection:
 **Encrypted state**: All config, session logs, and state are encrypted at rest with AES-256-GCM-SIV. Key stored in OS keyring.
 
 **Process boundary**: gbyctl runs as non-root. Only planned commands may invoke sudo, and only when policy explicitly allows.
+
+**Permission-aware retry**: If a safe read-only step fails with an obvious permission error, gbyctl offers an explicit sudo retry prompt for that step.
 
 ### What "safe" means
 

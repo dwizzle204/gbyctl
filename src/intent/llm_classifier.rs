@@ -107,6 +107,17 @@ pub fn classify(
     }
 }
 
+/// Check whether configured provider endpoint and credentials are currently reachable.
+pub fn connectivity_probe(
+    cfg: &ModelConfig,
+    api_key: &str,
+) -> std::result::Result<(), ClassifyError> {
+    match cfg.provider {
+        ProviderKind::OpenAiCompatible => probe_openai_compatible(cfg, api_key),
+        ProviderKind::Claude => probe_claude(cfg, api_key),
+    }
+}
+
 fn classify_openai_compatible(
     request: &str,
     cfg: &ModelConfig,
@@ -232,6 +243,79 @@ fn classify_claude(
         .and_then(Value::as_str)
         .map(str::to_owned)
         .ok_or_else(|| ClassifyError::Other("missing content[0].text".to_owned()))
+}
+
+fn probe_openai_compatible(
+    cfg: &ModelConfig,
+    api_key: &str,
+) -> std::result::Result<(), ClassifyError> {
+    let url = format!("{}/models", cfg.base_url.trim_end_matches('/'));
+
+    let mut headers = HeaderMap::new();
+    let token = format!("Bearer {api_key}");
+    let auth = HeaderValue::from_str(&token)
+        .map_err(|err| ClassifyError::Other(format!("invalid auth header: {err}")))?;
+    let _old = headers.insert(AUTHORIZATION, auth);
+
+    let client = Client::builder()
+        .use_rustls_tls()
+        .https_only(true)
+        .min_tls_version(Version::TLS_1_3)
+        .build()
+        .map_err(|err| ClassifyError::Other(format!("failed to build TLS client: {err}")))?;
+    let response = client
+        .get(url)
+        .headers(headers)
+        .send()
+        .map_err(|err| ClassifyError::Other(format!("request failed: {err}")))?;
+
+    if response.status().as_u16() == 401 || response.status().as_u16() == 403 {
+        return Err(ClassifyError::AuthFailed);
+    }
+
+    if !response.status().is_success() {
+        return Err(ClassifyError::Other(format!(
+            "provider status: {}",
+            response.status()
+        )));
+    }
+
+    Ok(())
+}
+
+fn probe_claude(cfg: &ModelConfig, api_key: &str) -> std::result::Result<(), ClassifyError> {
+    let url = format!("{}/models", cfg.base_url.trim_end_matches('/'));
+
+    let mut headers = HeaderMap::new();
+    let key = HeaderValue::from_str(api_key)
+        .map_err(|err| ClassifyError::Other(format!("invalid API key header: {err}")))?;
+    let _old = headers.insert("x-api-key", key);
+    let _old = headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+
+    let client = Client::builder()
+        .use_rustls_tls()
+        .https_only(true)
+        .min_tls_version(Version::TLS_1_3)
+        .build()
+        .map_err(|err| ClassifyError::Other(format!("failed to build TLS client: {err}")))?;
+    let response = client
+        .get(url)
+        .headers(headers)
+        .send()
+        .map_err(|err| ClassifyError::Other(format!("request failed: {err}")))?;
+
+    if response.status().as_u16() == 401 || response.status().as_u16() == 403 {
+        return Err(ClassifyError::AuthFailed);
+    }
+
+    if !response.status().is_success() {
+        return Err(ClassifyError::Other(format!(
+            "provider status: {}",
+            response.status()
+        )));
+    }
+
+    Ok(())
 }
 
 /// Fall back to deterministic classifier when model call fails.

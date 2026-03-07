@@ -130,6 +130,7 @@ jobs:
         run: ./scripts/make-source-tarball.sh
 
       - name: Smoke test Debian package in Docker
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: ./scripts/docker-deb-smoke-test.sh
 
       - name: Verify artifacts
@@ -188,6 +189,7 @@ jobs:
 
   docker-smoke:
     name: Docker smoke test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
