@@ -9,13 +9,12 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   version-metadata:
     name: Version metadata
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -29,6 +28,8 @@ jobs:
   rust-checks:
     name: Rust checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -64,6 +65,8 @@ jobs:
   release-build:
     name: Release build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -91,6 +94,8 @@ jobs:
   packaging:
     name: Packaging
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -124,6 +129,9 @@ jobs:
       - name: Build source tarball
         run: ./scripts/make-source-tarball.sh
 
+      - name: Smoke test Debian package in Docker
+        run: ./scripts/docker-deb-smoke-test.sh
+
       - name: Verify artifacts
         run: |
           version=$(tr -d '[:space:]' < VERSION)
@@ -134,6 +142,8 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -179,6 +189,8 @@ jobs:
   docker-smoke:
     name: Docker smoke test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout

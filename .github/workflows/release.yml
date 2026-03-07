@@ -11,13 +11,12 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
-
 jobs:
   release:
     name: Build and publish release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -72,6 +71,9 @@ jobs:
 
       - name: Build source tarball
         run: ./scripts/make-source-tarball.sh
+
+      - name: Smoke test Debian package in Docker
+        run: ./scripts/docker-deb-smoke-test.sh
 
       - name: Stage release artifacts
         run: |
