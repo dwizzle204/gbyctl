@@ -179,6 +179,7 @@ pub fn dispatch(cli: Cli) -> Result<()> {
 
     let mut results: Vec<CommandResult> = Vec::new();
     let mut saw_manual = false;
+    let mut highest_observed = PolicyClass::SafeExecute;
 
     for step in &built_plan.steps {
         match checklist::evaluate(step) {
@@ -199,12 +200,13 @@ pub fn dispatch(cli: Cli) -> Result<()> {
                     emit_line(&format!("STEP {}: {}", step.id, step.command.summary))?;
                     emit_line(&format!("CMD: {}", step.command.command))?;
                 }
-                let result = run_step_with_permission_recovery(
+                let (result, effective_policy) = run_step_with_permission_recovery(
                     &cli,
                     step.id.as_str(),
                     &step.command.command,
                     step.command.modifies_state,
                 )?;
+                highest_observed = max_policy(highest_observed, effective_policy);
                 if !cli.json {
                     render_curated_step_result(step.id.as_str(), &result)?;
                 }
@@ -216,6 +218,7 @@ pub fn dispatch(cli: Cli) -> Result<()> {
                     emit_line(&format!("CMD: {}", step.command.command))?;
                 }
                 let result = run_command_for_cli(&cli, &step.command.command)?;
+                highest_observed = max_policy(highest_observed, PolicyClass::ApprovalRequired);
                 if !cli.json {
                     render_curated_step_result(step.id.as_str(), &result)?;
                 }
@@ -223,6 +226,7 @@ pub fn dispatch(cli: Cli) -> Result<()> {
             }
             PolicyClass::ManualOnly => {
                 saw_manual = true;
+                highest_observed = max_policy(highest_observed, PolicyClass::ManualOnly);
                 if !cli.json {
                     emit_line(&format!("MANUAL-ONLY: {}", step.command.command))?;
                 }
@@ -240,7 +244,7 @@ pub fn dispatch(cli: Cli) -> Result<()> {
 
     let summary = verify::summary::build(&built_plan, &results);
     let mode = if saw_manual { "manual-only" } else { "execute" };
-    let highest = highest_policy(&built_plan.steps);
+    let highest = max_policy(highest_policy(&built_plan.steps), highest_observed);
 
     let audit_dir = default_state_dir()?.join("sessions");
     let _path = audit::session::persist(&audit_dir, &built_plan, &summary.outcome, highest)?;
@@ -643,6 +647,23 @@ fn highest_policy(steps: &[crate::skills::types::PlanStep]) -> PolicyClass {
     }
 }
 
+fn max_policy(left: PolicyClass, right: PolicyClass) -> PolicyClass {
+    if policy_rank(left) >= policy_rank(right) {
+        left
+    } else {
+        right
+    }
+}
+
+fn policy_rank(policy: PolicyClass) -> u8 {
+    match policy {
+        PolicyClass::SafeExecute => 0_u8,
+        PolicyClass::ApprovalRequired => 1_u8,
+        PolicyClass::ManualOnly => 2_u8,
+        PolicyClass::Forbidden => 3_u8,
+    }
+}
+
 fn output(cli: &Cli, mode: &str, intent: Option<&str>, message: &str) -> Result<()> {
     if cli.json {
         let payload = JsonResponse {
@@ -771,7 +792,7 @@ fn run_step_with_permission_recovery(
     step_id: &str,
     command: &str,
     modifies_state: bool,
-) -> Result<CommandResult> {
+) -> Result<(CommandResult, PolicyClass)> {
     let result = run_safe_command_for_cli(cli, command)?;
     if should_offer_sudo_retry(cli, command, modifies_state, &result) {
         emit_line(&format!(
@@ -781,15 +802,16 @@ fn run_step_with_permission_recovery(
             let sudo_command = format!("sudo {command}");
             if let Err(reason) = validate_sudo_retry_policy(step_id, &sudo_command) {
                 emit_line(&format!("Retry blocked by policy: {reason}"))?;
-                return Ok(result);
+                return Ok((result, PolicyClass::SafeExecute));
             }
             if !cli.json {
                 emit_line(&format!("CMD (retry): {sudo_command}"))?;
             }
-            return run_command_for_cli(cli, &sudo_command);
+            let retry_result = run_command_for_cli(cli, &sudo_command)?;
+            return Ok((retry_result, PolicyClass::ApprovalRequired));
         }
     }
-    Ok(result)
+    Ok((result, PolicyClass::SafeExecute))
 }
 
 fn should_offer_sudo_retry(
