@@ -100,7 +100,6 @@ pub fn dispatch(cli: Cli) -> Result<()> {
     if cli.status {
         return render_status(&cli);
     }
-
     if cli.request.is_none() && cli.command.is_none() {
         return render_no_input_guidance(&cli);
     }
@@ -666,7 +665,6 @@ fn render_no_input_guidance(cli: &Cli) -> Result<()> {
     if !cli.json {
         return emit_line(&render_help_text());
     }
-
     let message = concat!(
         "Give Gibby a Linux operations request in plain language or use an explicit subcommand.\n",
         "Examples:\n",
@@ -856,7 +854,6 @@ fn curated_output_lines(raw: &str, max_lines: usize) -> Vec<String> {
         .map(str::to_owned)
         .collect()
 }
-
 fn emit_line(line: &str) -> Result<()> {
     let mut stdout = io::stdout().lock();
     stdout
