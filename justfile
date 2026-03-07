@@ -29,3 +29,9 @@ package-deb:
 
 package-source:
   ./scripts/make-source-tarball.sh
+
+verify-version:
+  ./scripts/verify-version.sh
+
+docker-smoke:
+  ./scripts/docker-smoke-test.sh

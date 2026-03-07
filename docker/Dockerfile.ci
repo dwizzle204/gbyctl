@@ -1,0 +1,15 @@
+FROM rust:1.94-bookworm AS builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 jq \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 gbyctl
+COPY --from=builder /app/target/release/gbyctl /usr/local/bin/gbyctl
+USER gbyctl
+WORKDIR /home/gbyctl
+ENTRYPOINT ["/usr/local/bin/gbyctl"]

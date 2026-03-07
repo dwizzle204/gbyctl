@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::state::secure;
 
+const EPHEMERAL_ENV: &str = "GBYCTL_EPHEMERAL";
+
 /// Cached local state for planning hints.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LocalState {
@@ -24,6 +26,9 @@ pub struct LocalState {
 
 /// Load state from disk or return defaults if not present.
 pub fn load(path: &Path) -> Result<LocalState> {
+    if ephemeral_mode_enabled() {
+        return Ok(LocalState::default());
+    }
     if !path.exists() {
         return Ok(LocalState::default());
     }
@@ -39,6 +44,9 @@ pub fn load(path: &Path) -> Result<LocalState> {
 
 /// Persist state to disk.
 pub fn store(path: &Path, state: &LocalState) -> Result<()> {
+    if ephemeral_mode_enabled() {
+        return Ok(());
+    }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create state dir: {}", parent.display()))?;
@@ -55,4 +63,11 @@ pub fn store(path: &Path, state: &LocalState) -> Result<()> {
         )
     })?;
     Ok(())
+}
+
+fn ephemeral_mode_enabled() -> bool {
+    matches!(
+        std::env::var(EPHEMERAL_ENV).ok().as_deref(),
+        Some("1") | Some("true") | Some("TRUE") | Some("yes") | Some("YES")
+    )
 }

@@ -80,3 +80,5 @@ doc/
 *.kdbx
 *.agekey
 .sops.yaml
+gbyctl-*.tar.gz
+dist/

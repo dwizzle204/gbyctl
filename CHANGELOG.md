@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.5.5 - 2026-03-07
+
+- fix the CI packaging tarball exclusion so the source archive no longer tries to package its own output
+- pin the Docker builder image to a valid Rust `1.94` Bookworm tag
+- add direct Debian package smoke testing in Docker before CI packaging passes or a release publishes
+- tighten GitHub Actions permissions to job scope where write access is not required
+- align Docker smoke scripts with the actual CLI contract by using the global `--plan` entrypoint
+- allow ephemeral CI/container runs without a host keyring by disabling persisted state and audit writes when `GBYCTL_EPHEMERAL=1`
+- align Docker smoke runtime images with the supported Ubuntu-only host contract
+
+## 0.5.4 - 2026-03-06
+
+- add version-metadata verification in CI and release workflows
+- add packaging and Docker smoke-test jobs to validate distributable CLI behavior
+- add a tag-driven GitHub release workflow for binary, source, and Debian artifacts
+- fix source tarball naming to use `gbyctl-<version>.tar.gz`
+- align Docker builder and declared MSRV with the current stable Rust features used by the codebase
+
+## 0.5.3 - 2026-03-06
+
+- strengthen `CONTRIBUTING.md` around a fork-first contribution model for public contributors
+- add free CI code coverage artifact generation with `cargo-llvm-cov`
+- add PR and main-branch security scanning with CodeQL and cargo-audit
+
 ## 0.5.2 - 2026-03-06
 
 - add PR-path dependency review and release-build validation in GitHub Actions CI

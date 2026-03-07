@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use crate::skills::types::{Plan, PolicyClass};
 use crate::state::secure;
 
+const EPHEMERAL_ENV: &str = "GBYCTL_EPHEMERAL";
+
 /// Per-session execution log.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionLog {
@@ -34,6 +36,9 @@ pub fn persist(
     outcome: &str,
     highest: PolicyClass,
 ) -> Result<PathBuf> {
+    if ephemeral_mode_enabled() {
+        return Ok(base_dir.join("ephemeral-session.json"));
+    }
     fs::create_dir_all(base_dir)
         .with_context(|| format!("failed to create audit dir: {}", base_dir.display()))?;
 
@@ -57,4 +62,11 @@ pub fn persist(
     fs::rename(&temp_path, &path)
         .with_context(|| format!("failed to atomically write session log: {}", path.display()))?;
     Ok(path)
+}
+
+fn ephemeral_mode_enabled() -> bool {
+    matches!(
+        std::env::var(EPHEMERAL_ENV).ok().as_deref(),
+        Some("1") | Some("true") | Some("TRUE") | Some("yes") | Some("YES")
+    )
 }
