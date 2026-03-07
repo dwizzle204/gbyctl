@@ -7,14 +7,18 @@ labels: ["question", "policy"]
 
 ## Question
 
-## Example command or request
+## Example request
 
 ```bash
-# example command or request
+# Paste the exact request or command.
 ```
 
 ## Current behavior
 
 ## Expected behavior
 
-## Risk notes
+## Security or operational risk
+
+- [ ] Touches sudo, authentication, firewall, boot, storage, or package changes
+- [ ] Needs clarification around refusal vs manual-only vs approval-required behavior
+- [ ] I checked existing policy docs first

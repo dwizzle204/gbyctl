@@ -1,21 +1,24 @@
 ---
 name: Feature request
-about: Suggest an improvement that stays within gbyctl's Ubuntu operations scope
+about: Propose a new or improved Ubuntu operations workflow for gbyctl
 title: "[feature] "
 labels: ["enhancement"]
 ---
 
-## Problem
+## Problem to solve
 
 ## Proposed workflow
 
 ## Example user request
 
 ```bash
-# example request
+# Example command or natural-language request.
 ```
 
-## Why this fits gbyctl
+## Expected plan or outcome
 
-- [ ] This is an Ubuntu operations workflow
-- [ ] This is not a coding/general-chat request
+## Why this belongs in gbyctl
+
+- [ ] This is a bounded Ubuntu/Linux operations workflow
+- [ ] This can be expressed through skill routing, policy, and preview/approval flow
+- [ ] This is not a coding, chat, or general scripting request

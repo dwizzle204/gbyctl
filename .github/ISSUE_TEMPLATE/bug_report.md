@@ -1,32 +1,41 @@
 ---
 name: Bug report
-about: Report a bug or unexpected behavior in gbyctl
+about: Report incorrect or unexpected gbyctl behavior
 title: "[bug] "
 labels: ["bug"]
 ---
 
 ## Summary
 
-## Environment
+## Affected version
 
 - gbyctl version:
 - Ubuntu version:
+- Install method:
 
-## Command or request
+## Request
 
 ```bash
-# paste the exact command or natural-language request
+# Paste the exact gbyctl command or natural-language request.
 ```
 
-## Expected behavior
+## What you expected
 
-## Actual behavior
+## What happened
 
 ```text
-# paste relevant output
+# Paste the relevant output, refusal text, or error.
 ```
 
-## Notes
+## Reproduction steps
 
+1.
+2.
+3.
+
+## Scope check
+
+- [ ] This is an Ubuntu/Linux operations issue on the local host
+- [ ] This is not a coding request or general chat issue
+- [ ] This is not a private security vulnerability report
 - [ ] I searched for existing issues first
-- [ ] This is not a security vulnerability report
