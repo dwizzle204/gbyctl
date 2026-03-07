@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 - 2026-03-06
+
+- add PR-path dependency review and release-build validation in GitHub Actions CI
+- run cargo audit on pushes to `main` in addition to weekly scheduled security scans
+- tighten pull request and issue templates for reproducible reports and clearer scope checks
+
 ## 0.5.1 - 2026-03-06
 
 ### Changed

@@ -1,22 +1,31 @@
 ## Summary
 
-<!-- What changed and why? -->
+<!-- Describe the change in 2-5 concrete bullets. -->
 
-## Testing
+## Why
+
+<!-- Explain the user-visible or maintainer-visible reason for this change. -->
+
+## Validation
 
 ```bash
-# Commands run
+# Paste the exact commands you ran.
 ```
 
-## Security Impact
+## Risk
 
-- [ ] No security-sensitive behavior changed
-- [ ] Security-sensitive behavior changed and is explained below
+- Scope: low / medium / high
+- User impact:
+- Rollback:
 
 ## Checklist
 
-- [ ] `cargo fmt --all`
+- [ ] PR targets `main` from a short-lived branch
+- [ ] `cargo fmt --all -- --check`
 - [ ] `cargo clippy --all-targets -- -D warnings`
 - [ ] `cargo test`
-- [ ] Documentation updated if behavior changed
-- [ ] Added or updated tests for routing, policy, or CLI behavior where relevant
+- [ ] `cargo build --release`
+- [ ] Added or updated tests for changed behavior
+- [ ] Updated docs, `CHANGELOG.md`, and `VERSION` when behavior or contract changed
+- [ ] Not a direct push to `main`
+- [ ] Security impact reviewed and explained when auth, sudo, policy, network, or state handling changed
