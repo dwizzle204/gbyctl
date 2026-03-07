@@ -64,7 +64,7 @@ jobs:
         run: cargo build --release
 
       - name: Install cargo-deb
-        uses: taiki-e/install-action@cargo-deb
+        run: cargo install cargo-deb --locked
 
       - name: Build Debian package
         run: cargo deb --no-build

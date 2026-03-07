@@ -94,7 +94,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-deb
-        uses: taiki-e/install-action@cargo-deb
+        run: cargo install cargo-deb --locked
 
       - name: Cache cargo
         uses: actions/cache@v4
