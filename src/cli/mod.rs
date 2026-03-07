@@ -78,6 +78,10 @@ enum ResolveResult {
 
 /// Dispatch user input through plan and execution flow.
 pub fn dispatch(cli: Cli) -> Result<()> {
+    if cli.request.is_none() && cli.command.is_none() {
+        return render_no_input_guidance(&cli);
+    }
+
     // Process-level safety invariant: the assistant itself must not run as root.
     if is_running_as_root() {
         return output(
@@ -640,6 +644,22 @@ fn output(cli: &Cli, mode: &str, intent: Option<&str>, message: &str) -> Result<
         }
         emit_line(message)
     }
+}
+
+fn render_no_input_guidance(cli: &Cli) -> Result<()> {
+    let message = concat!(
+        "Give Gibby a Linux operations request in plain language or use an explicit subcommand.\n",
+        "Examples:\n",
+        "  gbyctl \"disk is full\"\n",
+        "  gbyctl \"why is my server slow\"\n",
+        "  gbyctl \"install nginx\"\n",
+        "  gbyctl doctor\n",
+        "Tips:\n",
+        "  - add --plan to preview without executing\n",
+        "  - add --json for machine-readable output\n",
+        "  - run --help to see all commands"
+    );
+    output(cli, "help", None, message)
 }
 
 fn emit_line(line: &str) -> Result<()> {
