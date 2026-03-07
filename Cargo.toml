@@ -2,6 +2,7 @@
 name = "gbyctl"
 version = "0.5.4"
 edition = "2024"
+rust-version = "1.94"
 description = "Ubuntu-focused Linux operations assistant with bounded workflows"
 license = "MIT"
 repository = "https://github.com/dwizzle204/gbyctl"

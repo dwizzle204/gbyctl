@@ -6,6 +6,7 @@
 - add packaging and Docker smoke-test jobs to validate distributable CLI behavior
 - add a tag-driven GitHub release workflow for binary, source, and Debian artifacts
 - fix source tarball naming to use `gbyctl-<version>.tar.gz`
+- align Docker builder and declared MSRV with the current stable Rust features used by the codebase
 
 ## 0.5.3 - 2026-03-06
 
