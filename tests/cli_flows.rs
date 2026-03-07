@@ -4,6 +4,7 @@ use std::process::Command;
 use serde_json::Value;
 use serde_json::json;
 use tempfile::TempDir;
+use tempfile::tempdir;
 
 fn isolated_command() -> Option<(TempDir, Command)> {
     let temp = TempDir::new().ok()?;
@@ -56,6 +57,81 @@ fn plan_mode_for_doctor_succeeds() {
 
     assert!(output.status.success());
     assert!(stdout.contains("PLAN"));
+}
+
+#[test]
+fn no_input_returns_guided_help() {
+    let temp_home_result = tempdir();
+    assert!(temp_home_result.is_ok());
+    let temp_home = if let Ok(temp_home) = temp_home_result {
+        temp_home
+    } else {
+        return;
+    };
+
+    let output_result = Command::new(env!("CARGO_BIN_EXE_gbyctl"))
+        .env("HOME", temp_home.path())
+        .current_dir(temp_home.path())
+        .output();
+    assert!(output_result.is_ok());
+    let output = if let Ok(output) = output_result {
+        output
+    } else {
+        return;
+    };
+
+    assert!(output.status.success());
+    let stdout_result = String::from_utf8(output.stdout);
+    assert!(stdout_result.is_ok());
+    let stdout = if let Ok(stdout) = stdout_result {
+        stdout
+    } else {
+        return;
+    };
+    assert!(stdout.contains("Give Gibby a Linux operations request"));
+    assert!(stdout.contains("gbyctl \"disk is full\""));
+    assert!(stdout.contains("--help"));
+}
+
+#[test]
+fn unquoted_multiword_request_routes_normally() {
+    let command_result = isolated_command();
+    assert!(command_result.is_some());
+    let (_temp, mut command) = if let Some(values) = command_result {
+        values
+    } else {
+        return;
+    };
+
+    let output_result = command
+        .args(["show", "me", "disk", "usage", "--json", "--plan"])
+        .output();
+    assert!(output_result.is_ok());
+    let output = if let Ok(output) = output_result {
+        output
+    } else {
+        return;
+    };
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if stderr.contains("must not be run as root") {
+        assert!(!output.status.success());
+        return;
+    }
+
+    assert!(output.status.success());
+    let json = parse_json_output(&output);
+    assert!(json.is_some());
+    let json = if let Some(json) = json {
+        json
+    } else {
+        return;
+    };
+    assert_eq!(json.get("mode").and_then(Value::as_str), Some("plan-only"));
+    assert_eq!(
+        json.get("intent").and_then(Value::as_str),
+        Some("disk_full_triage")
+    );
 }
 
 #[test]

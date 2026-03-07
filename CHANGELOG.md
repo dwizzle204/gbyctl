@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.6 - 2026-03-07
+
+- keep root refusal ahead of empty-input guidance so bare invocations still fail closed under root
+- normalize unquoted multi-word natural-language requests before Clap parsing so commands like `gbyctl show me disk usage` route correctly
+- harden the no-input regression test to satisfy the repo clippy policy
+
 ## 0.5.5 - 2026-03-07
 
 - fix the CI packaging tarball exclusion so the source archive no longer tries to package its own output
