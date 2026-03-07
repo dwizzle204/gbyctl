@@ -1,6 +1,6 @@
 [package]
 name = "gbyctl"
-version = "0.5.3"
+version = "0.5.4"
 edition = "2024"
 description = "Ubuntu-focused Linux operations assistant with bounded workflows"
 license = "MIT"

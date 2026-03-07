@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release, for example v0.5.4'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Verify version metadata
+        run: ./scripts/verify-version.sh "${{ steps.tag.outputs.value }}"
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Install cargo-deb
+        uses: taiki-e/install-action@cargo-deb
+
+      - name: Build Debian package
+        run: cargo deb --no-build
+
+      - name: Build source tarball
+        run: ./scripts/make-source-tarball.sh
+
+      - name: Stage release artifacts
+        run: |
+          version=$(tr -d '[:space:]' < VERSION)
+          mkdir -p dist
+          cp target/release/gbyctl "dist/gbyctl-v${version}-linux-x86_64"
+          cp target/debian/*.deb dist/
+          cp "gbyctl-${version}.tar.gz" "dist/gbyctl-v${version}-source.tar.gz"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.tag.outputs.value }}"
+          gh release create "$tag" dist/* \
+            --verify-tag \
+            --title "$tag" \
+            --notes-file CHANGELOG.md
