@@ -78,10 +78,6 @@ enum ResolveResult {
 
 /// Dispatch user input through plan and execution flow.
 pub fn dispatch(cli: Cli) -> Result<()> {
-    if cli.request.is_none() && cli.command.is_none() {
-        return render_no_input_guidance(&cli);
-    }
-
     // Process-level safety invariant: the assistant itself must not run as root.
     if is_running_as_root() {
         return output(
@@ -90,6 +86,10 @@ pub fn dispatch(cli: Cli) -> Result<()> {
             None,
             "gbyctl must not be run as root. Run as a regular user; commands may invoke sudo when required.",
         );
+    }
+
+    if cli.request.is_none() && cli.command.is_none() {
+        return render_no_input_guidance(&cli);
     }
 
     if matches!(cli.command, Some(Commands::Setup)) {
