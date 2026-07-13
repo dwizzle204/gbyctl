@@ -5,7 +5,6 @@ ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 IMAGE_TAG=${1:-gbyctl-ci:local}
 
 cd "$ROOT_DIR"
-
 docker build -f docker/Dockerfile.ci -t "$IMAGE_TAG" .
 
 docker run --rm -e GBYCTL_EPHEMERAL=1 "$IMAGE_TAG" --help >/dev/null
