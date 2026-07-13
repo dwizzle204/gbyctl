@@ -56,4 +56,15 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Run cargo-audit
-        run: cargo audit --deny warnings
+        run: |
+          set -o pipefail
+          cargo audit --deny warnings --json | tee cargo-audit.json
+
+      - name: Upload cargo-audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-audit-report
+          path: cargo-audit.json
+          if-no-files-found: error
+          retention-days: 1
