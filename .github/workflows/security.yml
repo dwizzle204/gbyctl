@@ -55,13 +55,20 @@ jobs:
       - name: Install cargo-audit
         uses: taiki-e/install-action@cargo-audit
 
-      - name: Update consolidated dependencies
-        run: |
-          cargo update -p chrono --precise 0.4.45
-          cargo update -p serde_json --precise 1.0.150
-          cargo update -p clap --precise 4.6.1
-          cargo update -p shlex --precise 2.0.1
-          cargo update -p rand@0.9.3 --precise 0.9.4
+      - name: Update chrono
+        run: cargo update -p chrono --precise 0.4.45
+
+      - name: Update serde_json
+        run: cargo update -p serde_json --precise 1.0.150
+
+      - name: Update clap
+        run: cargo update -p clap --precise 4.6.1
+
+      - name: Update shlex
+        run: cargo update -p shlex --precise 2.0.1
+
+      - name: Update rand
+        run: cargo update -p rand@0.9.3 --precise 0.9.4
 
       - name: Validate dependency set
         run: |
