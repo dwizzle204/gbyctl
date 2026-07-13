@@ -41,13 +41,13 @@ jobs:
     name: Cargo audit
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
 
     steps:
-      - name: Checkout
+      - name: Checkout branch
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: ${{ github.head_ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -55,5 +55,29 @@ jobs:
       - name: Install cargo-audit
         uses: taiki-e/install-action@cargo-audit
 
-      - name: Run cargo-audit
-        run: cargo audit --deny warnings
+      - name: Update consolidated dependencies
+        run: |
+          cargo update -p chrono --precise 0.4.45
+          cargo update -p serde_json --precise 1.0.150
+          cargo update -p clap --precise 4.6.1
+          cargo update -p shlex --precise 2.0.1
+          cargo update -p rand@0.9.3 --precise 0.9.4
+
+      - name: Validate dependency set
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+          cargo build --release
+          cargo audit --deny warnings
+
+      - name: Commit consolidated lockfile
+        run: |
+          if git diff --quiet -- Cargo.lock; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock
+          git commit -m "chore(deps): refresh consolidated lockfile"
+          git push origin HEAD:${{ github.head_ref }}
