@@ -27,7 +27,7 @@ docker run --rm \
     plan_json=$(su -s /bin/bash -c "GBYCTL_EPHEMERAL=1 gbyctl --json --plan \"disk is full\"" gbyctl)
     echo "$plan_json" | jq -e ".mode == \"plan-only\"" >/dev/null
 
-    unsupported_json=$(su -s /bin/bash -c "GBYCTL_EPHEMERAL=1 gbyctl --json \"write a python script\"" gbyctl)
+    unsupported_json=$(su -s /bin/bash -c "GBYCTL_EPHEMERAL=1 gbyctl --json \"write a python script\"" gbyctl || true)
     echo "$unsupported_json" | jq -e ".mode == \"out_of_scope\" or .mode == \"refusal\"" >/dev/null
 
     root_output=$(GBYCTL_EPHEMERAL=1 gbyctl --plan "why is my server slow" 2>&1 || true)
